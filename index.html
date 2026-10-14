@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cabaran Order Mamak & Kafe: Bajet 2000 kcal</title>
+  
+  <!-- MediaPipe Libraries untuk Hand Tracking -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --panel-bg: rgba(30, 41, 59, 0.92);
+      --safe-green: #10b981;
+      --warn-amber: #f59e0b;
+      --danger-red: #ef4444;
+      --accent-blue: #38bdf8;
+      --gold: #facc15;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #f8fafc;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    /* Kamera sebagai latar belakang cermin */
+    #webcam-video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+      opacity: 0.35;
+      z-index: 1;
+    }
+
+    /* Lapisan Antaramuka Utama */
+    #game-layer {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 14px 22px;
+    }
+
+    /* Bar Atas: Tajuk & Kawalan */
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel-bg);
+      padding: 10px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--gold);
+    }
+
+    .privacy-note {
+      font-size: 0.76rem;
+      color: #94a3b8;
+      margin-top: 2px;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn-control {
+      background: #334155;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+
+    .btn-report {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent-blue);
+      color: var(--accent-blue);
+    }
+
+    /* Panel Meter Bajet Kalori & Gula */
+    .meters-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      background: var(--panel-bg);
+      padding: 12px 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .meter-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .meter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .meter-val {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: #ffffff;
+    }
+
+    .meter-track {
+      width: 100%;
+      height: 16px;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--safe-green);
+      transition: width 0.4s ease-out, background-color 0.3s;
+    }
+
+    /* Tajuk Waktu Makan Semasa */
+    .meal-stage-banner {
+      text-align: center;
+      background: rgba(15, 23, 42, 0.92);
+      border: 2px solid var(--accent-blue);
+      padding: 10px 20px;
+      border-radius: 16px;
+      max-width: 780px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .meal-time-badge {
+      display: inline-block;
+      background: var(--accent-blue);
+      color: #0f172a;
+      font-size: 0.75rem;
+      font-weight: 900;
+      padding: 3px 12px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .meal-prompt {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+
+    .meal-subprompt {
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      margin-top: 2px;
+    }
+
+    /* Grid 3 Kad Menu Pilihan */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      height: 48vh;
+      max-height: 390px;
+    }
+
+    .menu-card {
+      background: var(--panel-bg);
+      border-radius: 20px;
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 3px solid rgba(255,255,255,0.18);
+      transition: transform 0.15s, border-color 0.15s, background-color 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .menu-card.active-hover {
+      transform: translateY(-6px) scale(1.02);
+      border-color: var(--gold);
+      background: rgba(30, 41, 59, 0.98);
+      box-shadow: 0 14px 30px rgba(250, 204, 21, 0.3);
+    }
+
+    .set-badge {
+      background: #334155;
+      color: var(--gold);
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 8px;
+      width: fit-content;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .food-main-title {
+      font-size: 1.3rem;
+      font-weight: 900;
+      color: #ffffff;
+      margin-top: 10px;
+      line-height: 1.25;
+    }
+
+    .drink-addon {
+      margin-top: 8px;
+      background: rgba(15, 23, 42, 0.75);
+      border-left: 4px solid var(--accent-blue);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+
+    .menu-desc {
+      margin-top: 10px;
+      font-size: 0.84rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    .order-cta {
+      margin-top: auto;
+      padding-top: 10px;
+      font-size: 0.8rem;
+      font-weight: 800;
+      color: var(--gold);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Bar Masa Tahan (Dwell Bar) */
+    .dwell-bar-bg {
+      width: 100%;
+      height: 12px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .dwell-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--gold);
+      transition: width 0.05s linear;
+    }
+
+    /* Kursor Tangan */
+    #hand-cursor {
+      position: fixed;
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      border: 4px solid var(--gold);
+      background: rgba(250, 204, 21, 0.28);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 16px rgba(250, 204, 21, 0.85);
+    }
+
+    #hand-cursor::after {
+      content: "";
+      width: 10px;
+      height: 10px;
+      background: #ffffff;
+      border-radius: 50%;
+    }
+
+    /* Notifikasi Bongkar Kalori & Gula Selepas Order */
+    #feedback-toast {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      background: rgba(15, 23, 42, 0.98);
+      border: 3px solid var(--accent-blue);
+      padding: 24px 30px;
+      border-radius: 22px;
+      text-align: center;
+      z-index: 200;
+      max-width: 540px;
+      width: 92%;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.85);
+    }
+
+    #feedback-toast.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .fb-dish-title {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+
+    .fb-badges-row {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .fb-pill {
+      padding: 6px 14px;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 900;
+    }
+
+    .fb-fact {
+      font-size: 0.98rem;
+      line-height: 1.45;
+      color: #e2e8f0;
+    }
+
+    /* Modal Resit Tamat & Modal Laporan */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.94);
+      z-index: 300;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      overflow-y: auto;
+    }
+
+    .modal-box {
+      background: #1e293b;
+      border: 2px solid var(--accent-blue);
+      border-radius: 24px;
+      padding: 26px;
+      max-width: 600px;
+      width: 100%;
+      text-align: center;
+    }
+
+    .modal-title {
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: var(--gold);
+      margin-bottom: 6px;
+    }
+
+    .receipt-box {
+      background: #0f172a;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin: 14px 0;
+      text-align: left;
+      font-size: 0.88rem;
+      max-height: 210px;
+      overflow-y: auto;
+    }
+
+    .receipt-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px dashed rgba(255,255,255,0.12);
+      gap: 10px;
+    }
+
+    .receipt-item:last-child {
+      border-bottom: none;
+    }
+
+    .summary-totals {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 12px 0;
+    }
+
+    .total-card {
+      background: rgba(15, 23, 42, 0.7);
+      padding: 10px;
+      border-radius: 12px;
+      border: 2px solid transparent;
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: #0f172a;
+      font-weight: 900;
+      font-size: 1rem;
+      padding: 13px 26px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    .btn-danger {
+      background: var(--danger-red);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 9px 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 820px) {
+      .menu-grid {
+        grid-template-columns: 1fr;
+        height: 52vh;
+        max-height: none;
+        overflow-y: auto;
+      }
+      .meters-panel {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .menu-desc { display: none; }
+      .food-main-title { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Kamera Latar Belakang -->
+  <video id="webcam-video" playsinline></video>
+
+  <!-- Kursor Tangan -->
+  <div id="hand-cursor"></div>
+
+  <!-- Antaramuka Utama -->
+  <div id="game-layer">
+    <div class="top-bar">
+      <div>
+        <div class="brand-title">Cabaran Order Mamak & Kafe: Bajet 2000 kcal</div>
+        <div class="privacy-note" id="cam-status">Mencari kamera... (Boleh juga guna sentuhan skrin). Tiada video dirakam.</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn-control btn-report" id="btn-open-report" onclick="openReportModal()">Laporan (0)</button>
+        <button class="btn-control" onclick="resetGame()">Mula Semula</button>
+      </div>
+    </div>
+
+    <!-- Meter Bajet Harian (Kalori & Gula) -->
+    <div class="meters-panel">
+      <div class="meter-box">
+        <div class="meter-header">
+          <span>Bajet Kalori Harian (Sasaran: 2000 kcal)</span>
+          <span class="meter-val" id="kcal-text">0 / 2000 kcal</span>
+        </div>
+        <div class="meter-track">
+          <div class="meter-fill" id="kcal-bar"></div>
+        </div>
+      </div>
+
+      <div class="meter-box">
+        <div class="meter-header">
+          <span>Had Gula Tambahan (Maksimum: 10 Sudu Teh)</span>
+          <span class="meter-val" id="sugar-text">0.0 / 10.0 sudu teh</span>
+        </div>
+        <div class="meter-track">
+          <div class="meter-fill" id="sugar-bar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Banner Waktu Makan -->
+    <div class="meal-stage-banner">
+      <span class="meal-time-badge" id="stage-badge">Waktu Makan 1 / 5</span>
+      <div class="meal-prompt" id="stage-title">Memuatkan Waktu Makan...</div>
+      <div class="meal-subprompt">Halakan tapak tangan pada salah satu set hidangan di bawah untuk membuat pesanan:</div>
+    </div>
+
+    <!-- 3 Pilihan Menu -->
+    <div class="menu-grid" id="menu-cards-container">
+      <!-- Kad Menu 0 -->
+      <div class="menu-card" data-idx="0">
+        <div>
+          <span class="set-badge">Set Pilihan A</span>
+          <div class="food-main-title" id="food-title-0">-</div>
+          <div class="drink-addon" id="drink-title-0">-</div>
+          <div class="menu-desc" id="menu-desc-0">-</div>
+        </div>
+        <div>
+          <div class="order-cta">Tahan Tangan Untuk Order</div>
+          <div class="dwell-bar-bg"><div class="dwell-bar-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- Kad Menu 1 -->
+      <div class="menu-card" data-idx="1">
+        <div>
+          <span class="set-badge">Set Pilihan B</span>
+          <div class="food-main-title" id="food-title-1">-</div>
+          <div class="drink-addon" id="drink-title-1">-</div>
+          <div class="menu-desc" id="menu-desc-1">-</div>
+        </div>
+        <div>
+          <div class="order-cta">Tahan Tangan Untuk Order</div>
+          <div class="dwell-bar-bg"><div class="dwell-bar-fill"></div></div>
+        </div>
+      </div>
+
+      <!-- Kad Menu 2 -->
+      <div class="menu-card" data-idx="2">
+        <div>
+          <span class="set-badge">Set Pilihan C</span>
+          <div class="food-main-title" id="food-title-2">-</div>
+          <div class="drink-addon" id="drink-title-2">-</div>
+          <div class="menu-desc" id="menu-desc-2">-</div>
+        </div>
+        <div>
+          <div class="order-cta">Tahan Tangan Untuk Order</div>
+          <div class="dwell-bar-bg"><div class="dwell-bar-fill"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifikasi Bongkar Kalori Selepas Order -->
+  <div id="feedback-toast">
+    <div class="fb-dish-title" id="fb-dish-name">Pesanan Diterima!</div>
+    <div class="fb-badges-row">
+      <span class="fb-pill" id="fb-kcal-pill">+0 kcal</span>
+      <span class="fb-pill" id="fb-sugar-pill">+0 sudu teh gula</span>
+    </div>
+    <div class="fb-fact" id="fb-fact-text">Info pemakanan di sini.</div>
+  </div>
+
+  <!-- Modal Resit Akhir Seharian -->
+  <div class="modal-overlay" id="end-modal">
+    <div class="modal-box">
+      <div class="modal-title" id="end-status-title">Resit Pemakanan Harian Anda</div>
+      <p id="end-status-subtitle" style="color: #cbd5e1; font-size: 0.92rem;"></p>
+
+      <div class="summary-totals">
+        <div class="total-card" id="end-kcal-card">
+          <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Jumlah Kalori</div>
+          <div style="font-size: 1.55rem; font-weight: 900; margin-top: 4px;" id="end-kcal-total">0 kcal</div>
+          <div style="font-size: 0.75rem; margin-top: 2px;" id="end-kcal-status">Sasaran: 2000 kcal</div>
+        </div>
+
+        <div class="total-card" id="end-sugar-card">
+          <div style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Jumlah Gula Tambahan</div>
+          <div style="font-size: 1.55rem; font-weight: 900; margin-top: 4px;" id="end-sugar-total">0 sudu teh</div>
+          <div style="font-size: 0.75rem; margin-top: 2px;" id="end-sugar-status">Had: 10 sudu teh</div>
+        </div>
+      </div>
+
+      <div class="receipt-box" id="receipt-list"></div>
+
+      <p id="end-advice-text" style="color: #f8fafc; font-size: 0.92rem; line-height: 1.45; margin-top: 8px;"></p>
+
+      <button class="btn-primary" onclick="resetGame()">Cuba Lagi (Pemain Seterusnya)</button>
+    </div>
+  </div>
+
+  <!-- Modal Laporan Output Program -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-box">
+      <div class="modal-title">Rekod Output: Cabaran Mamak & Kafe</div>
+      <p style="color: #94a3b8; font-size: 0.85rem;">Data disimpan secara tempatan di dalam peranti ini.</p>
+      <div class="receipt-box" id="report-summary-box" style="line-height: 1.7;">
+        Memuatkan statistik...
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        <button class="btn-primary" style="margin-top: 0;" onclick="downloadCSVReport()">Muat Turun CSV (Excel)</button>
+        <button class="btn-control" style="padding: 12px 20px;" onclick="closeReportModal()">Tutup</button>
+      </div>
+      <div>
+        <button class="btn-danger" onclick="clearLocalRecords()">Padam Semua Rekod (Reset Program)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- 1. DATA 5 WAKTU MAKAN HARIAN (KOPITIAM, NASI CAMPUR, KAFE VIRAL, MALAM & MAMAK) ---
+    const MEAL_STAGES = [
+      {
+        stageName: "Waktu 1 / 5 : Sarapan Pagi (7:30 Pagi)",
+        prompt: "Anda singgah di Kopitiam sebelum mula kerja. Pilih sarapan anda:",
+        options: [
+          {
+            food: "Nasi Lemak Ayam Goreng Berempah",
+            drink: "Minuman: Teh Tarik Gelas Besar",
+            desc: "Nasi lemak santan penuh bersama ayam goreng rangup dan teh tarik manis berkrim.",
+            kcal: 820,
+            sugarTsp: 4.5,
+            fact: "Set ini menyumbang 820 kcal! Teh tarik sahaja mengandungi sekitar 4.5 sudu teh gula (susu pekat manis)."
+          },
+          {
+            food: "Mi Kolok Daging / Bihun Sup + Sayur",
+            drink: "Minuman: Kopi O Kosong / Air Suam",
+            desc: "Semangkuk mi bersama hirisan daging tanpa lemak, sawi hijau dan kopi tanpa gula.",
+            kcal: 410,
+            sugarTsp: 0.0,
+            fact: "Pilihan bijak! Memesan Kopi O Kosong menjimatkan hampir 4 sudu teh gula pada waktu pagi."
+          },
+          {
+            food: "2 Keping Roti Canai Banjir Kuah Dhal & Sambal",
+            drink: "Minuman: Minuman Malt Coklat Ais (Ikat Tepi)",
+            desc: "Dua keping roti canai digoreng bersama kuah banjir dan sebungkus air coklat ais pekat.",
+            kcal: 860,
+            sugarTsp: 5.5,
+            fact: "2 keping roti canai banjir (~620 kcal) ditambah air coklat ais menjadikan sarapan ini hampir separuh bajet kalori harian!"
+          }
+        ]
+      },
+      {
+        stageName: "Waktu 2 / 5 : Makan Tengah Hari (1:00 Petang)",
+        prompt: "Waktu rehat tengah hari bersama rakan sekerja. Apa pilihan anda?",
+        options: [
+          {
+            food: "Nasi Putih (1 Senduk) + Ikan Kembung Bakar + Ulam & Sayur",
+            drink: "Minuman: Air Kosong / Air Mineral",
+            desc: "Susunan pinggan Suku Suku Separuh dengan sumber protein bakar dan sayuran segar.",
+            kcal: 450,
+            sugarTsp: 0.0,
+            fact: "Tepat konsep Suku Suku Separuh! Rendah lemak tepu, mengenyangkan dan 0g gula tambahan."
+          },
+          {
+            food: "Nasi Ayam Goreng Crispy + Kuah Sup",
+            drink: "Minuman: Sirap Bandung Ais",
+            desc: "Nasi dimasak bersama marjerin/lemak ayam, ayam goreng kulit rangup dan air sirap susu pekat.",
+            kcal: 850,
+            sugarTsp: 5.0,
+            fact: "Nasi ayam goreng tinggi lemak tepu, manakala segelas Sirap Bandung menyumbang sekitar 5 sudu teh gula!"
+          },
+          {
+            food: "Nasi Putih Banyak + Ayam Masak Merah + Kuah Kari Pekat",
+            drink: "Minuman: Teh O Ais Limau",
+            desc: "Nasi dua senduk penuh bersama lauk bersantan/berminyak dan minuman manis sejuk.",
+            kcal: 740,
+            sugarTsp: 3.5,
+            fact: "Kuah kari pekat dan sambal berminyak menambah kalori tersembunyi, manakala Teh O Ais Limau ada 3.5 sudu teh gula."
+          }
+        ]
+      },
+      {
+        stageName: "Waktu 3 / 5 : Minum Petang & Kafe Viral (4:00 Petang)",
+        prompt: "Mata mula mengantuk di sebelah petang. Kawan ajak order air & kudapan:",
+        options: [
+          {
+            food: "Croissant Mentega / Bomboloni Coklat",
+            drink: "Minuman: Boba Brown Sugar Milk Tea (Saiz Besar)",
+            desc: "Pastri berlemak manis dipadankan dengan minuman boba gula perang penuh krim.",
+            kcal: 780,
+            sugarTsp: 8.5,
+            fact: "Awas Kalori Cecair! Satu cawan besar Boba Brown Sugar sahaja boleh mencecah 8.5 sudu teh gula dan 450 kcal!"
+          },
+          {
+            food: "Buah Jambu Batu / Betik Potong & Sedikit Badam",
+            drink: "Minuman: Latte Tanpa Gula / Teh Hijau Kosong",
+            desc: "Kudapan buah segar tinggi serat bersama kopi susu segar atau teh hijau tanpa tambahan gula.",
+            kcal: 190,
+            sugarTsp: 0.0,
+            fact: "Tukar Sihat terbaik! Susu segar dalam Latte tanpa gula memberi protein tanpa gula tambahan."
+          },
+          {
+            food: "3 Ketul Pisang Goreng Rangup",
+            drink: "Minuman: Kopi Pracampuran 3-Dalam-1",
+            desc: "Pisang goreng panas berminyak bersama secawan kopi segera manis.",
+            kcal: 460,
+            sugarTsp: 3.5,
+            fact: "3 ketul pisang goreng menyumbang sekitar 300 kcal akibat serapan minyak gorengan, ditambah 3.5 sudu teh gula daripada kopi 3-dalam-1."
+          }
+        ]
+      },
+      {
+        stageName: "Waktu 4 / 5 : Makan Malam (7:30 Malam)",
+        prompt: "Selesai kerja dan tiba waktu makan malam. Pilih hidangan anda:",
+        options: [
+          {
+            food: "Kuey Teow Goreng Kerang & Telur + Keropok",
+            drink: "Minuman: Barli Ais Manis",
+            desc: "Kuey teow digoreng dengan kicap manis dan minyak bersama minuman barli bergula.",
+            kcal: 790,
+            sugarTsp: 3.5,
+            fact: "Kuey teow goreng menyerap banyak minyak semasa digoreng dan rendah kandungan sayur-sayuran."
+          },
+          {
+            food: "Nasi Putih (1 Senduk) + Sup Tomyam Ayam/Ikan + Kailan Ikan Masin (Kurang Minyak)",
+            drink: "Minuman: Air Kosong",
+            desc: "Lauk berkuah rebus tanpa santan bersama sayur hijau dan nasi terkawal.",
+            kcal: 460,
+            sugarTsp: 0.0,
+            fact: "Pilihan makan malam yang seimbang! Masakan sup/tomyam jauh lebih rendah kalori berbanding bergoreng."
+          },
+          {
+            food: "Burger Ayam Crispy Double Cheese + Kentang Goreng",
+            drink: "Minuman: Air Berkarbonat Tin",
+            desc: "Set makanan segera dengan sos mayonis melimpah, kepingan keju dan air bergas.",
+            kcal: 920,
+            sugarTsp: 7.0,
+            fact: "Set ini hampir mencecah 1,000 kcal dengan 7 sudu teh gula daripada air tin serta tinggi garam (natrium)!"
+          }
+        ]
+      },
+      {
+        stageName: "Waktu 5 / 5 : Lepak Mamak Tengah Malam / Supper (10:30 Malam)",
+        prompt: "Kawan ajak lepak Mamak tengok bola sebelum tidur. Apa pesanan terakhir anda?",
+        options: [
+          {
+            food: "Maggi Goreng Double + Telur Mata",
+            drink: "Minuman: Milo Dinosaur (Tabur Serbuk Melimpah)",
+            desc: "Mi segera goreng pedas berminyak bersama segelas besar air coklat pekat.",
+            kcal: 910,
+            sugarTsp: 7.5,
+            fact: "Perangkap Supper! Makan hampir 910 kcal dan 7.5 sudu teh gula sejurus sebelum tidur mudah menyebabkan berat badan naik mendadak."
+          },
+          {
+            food: "Roti Tisu Tinggi Bersalut Gula & Susu Pekat",
+            drink: "Minuman: Teh Tarik Halia",
+            desc: "Roti nipis garing disiram susu pekat manis dan taburan gula pasir.",
+            kcal: 640,
+            sugarTsp: 6.5,
+            fact: "Walaupun Roti Tisu nampak nipis, siraman susu pekat dan gula bersama Teh Tarik menyumbang 6.5 sudu teh gula!"
+          },
+          {
+            food: "Tidak Ambil Makanan Berat (Sudah Kenyang)",
+            drink: "Minuman: Teh O Limau Suam (Tanpa Gula) / Air Suam",
+            desc: "Sekadar teman kawan berborak sambil minum air tanpa gula untuk rehatkan sistem penghadaman.",
+            kcal: 15,
+            sugarTsp: 0.0,
+            fact: "Keputusan paling bijak! Mengelakkan makan berat lewat malam membantu kualiti tidur dan kawalan berat badan."
+          }
+        ]
+      }
+    ];
+
+    // --- 2. PENJANA BUNYI (WEB AUDIO API) ---
+    let audioCtx = null;
+    function playSound(type) {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        const now = audioCtx.currentTime;
+        if (type === 'hover') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(480, now);
+          gain.gain.setValueAtTime(0.07, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+          osc.start(now);
+          osc.stop(now + 0.05);
+        } else if (type === 'goodOrder') {
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(523.25, now);
+          osc.frequency.setValueAtTime(659.25, now + 0.1);
+          osc.frequency.setValueAtTime(783.99, now + 0.2);
+          gain.gain.setValueAtTime(0.24, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.42);
+          osc.start(now);
+          osc.stop(now + 0.42);
+        } else if (type === 'heavyOrder') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(240, now);
+          osc.frequency.linearRampToValueAtTime(155, now + 0.32);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.linearRampToValueAtTime(0.01, now + 0.36);
+          osc.start(now);
+          osc.stop(now + 0.36);
+        }
+      } catch (e) {}
+    }
+
+    // --- 3. PEMBOLEHUBAH PERMAINAN ---
+    const MAX_KCAL_BUDGET = 2000;
+    const MAX_SUGAR_TSP = 10.0;
+
+    let currentStageIndex = 0;
+    let totalKcal = 0;
+    let totalSugarTsp = 0;
+    let chosenReceipt = [];
+    let currentShuffledOptions = [];
+    let isProcessingFeedback = false;
+    let activeControlMode = "Sentuhan / Tetikus";
+
+    // Koordinat Kursor
+    let targetX = window.innerWidth / 2;
+    let targetY = window.innerHeight / 2;
+    let currentX = targetX;
+    let currentY = targetY;
+
+    const DWELL_DURATION = 850; // 0.85 saat
+    let activeCardEl = null;
+    let dwellStartTime = 0;
+
+    // Elemen DOM
+    const cursorEl = document.getElementById('hand-cursor');
+    const kcalTextEl = document.getElementById('kcal-text');
+    const kcalBarEl = document.getElementById('kcal-bar');
+    const sugarTextEl = document.getElementById('sugar-text');
+    const sugarBarEl = document.getElementById('sugar-bar');
+    const stageBadgeEl = document.getElementById('stage-badge');
+    const stageTitleEl = document.getElementById('stage-title');
+    const menuCards = document.querySelectorAll('.menu-card');
+    const toastEl = document.getElementById('feedback-toast');
+    const endModalEl = document.getElementById('end-modal');
+    const reportModalEl = document.getElementById('report-modal');
+
+    function shuffleArray(arr) {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    }
+
+    function resetGame() {
+      currentStageIndex = 0;
+      totalKcal = 0;
+      totalSugarTsp = 0;
+      chosenReceipt = [];
+      endModalEl.style.display = 'none';
+      reportModalEl.style.display = 'none';
+      updateMetersUI();
+      loadStage();
+    }
+
+    function updateMetersUI() {
+      kcalTextEl.textContent = `${totalKcal} / ${MAX_KCAL_BUDGET} kcal`;
+      sugarTextEl.textContent = `${totalSugarTsp.toFixed(1)} / ${MAX_SUGAR_TSP.toFixed(1)} sudu teh`;
+
+      const kcalPct = Math.min(100, (totalKcal / MAX_KCAL_BUDGET) * 100);
+      const sugarPct = Math.min(100, (totalSugarTsp / MAX_SUGAR_TSP) * 100);
+
+      kcalBarEl.style.width = `${kcalPct}%`;
+      sugarBarEl.style.width = `${sugarPct}%`;
+
+      // Warna Bar Kalori
+      if (totalKcal > MAX_KCAL_BUDGET) kcalBarEl.style.background = "#ef4444";
+      else if (totalKcal > 1600) kcalBarEl.style.background = "#f59e0b";
+      else kcalBarEl.style.background = "#10b981";
+
+      // Warna Bar Gula
+      if (totalSugarTsp > MAX_SUGAR_TSP) sugarBarEl.style.background = "#ef4444";
+      else if (totalSugarTsp > 7.0) sugarBarEl.style.background = "#f59e0b";
+      else sugarBarEl.style.background = "#10b981";
+    }
+
+    function loadStage() {
+      if (currentStageIndex >= MEAL_STAGES.length) {
+        showFinalReceipt();
+        return;
+      }
+
+      isProcessingFeedback = false;
+      clearCardHovers();
+
+      const stage = MEAL_STAGES[currentStageIndex];
+      stageBadgeEl.textContent = stage.stageName;
+      stageTitleEl.textContent = stage.prompt;
+
+      currentShuffledOptions = shuffleArray(stage.options);
+
+      currentShuffledOptions.forEach((opt, idx) => {
+        document.getElementById(`food-title-${idx}`).textContent = opt.food;
+        document.getElementById(`drink-title-${idx}`).textContent = opt.drink;
+        document.getElementById(`menu-desc-${idx}`).textContent = opt.desc;
+      });
+    }
+
+    function clearCardHovers() {
+      activeCardEl = null;
+      menuCards.forEach(c => {
+        c.classList.remove('active-hover');
+        const fill = c.querySelector('.dwell-bar-fill');
+        if (fill) fill.style.width = '0%';
+      });
+    }
+
+    // Gelung Animasi Utama (60fps)
+    function updateLoop(timestamp) {
+      currentX += (targetX - currentX) * 0.35;
+      currentY += (targetY - currentY) * 0.35;
+
+      cursorEl.style.left = `${currentX}px`;
+      cursorEl.style.top = `${currentY}px`;
+
+      if (!isProcessingFeedback && endModalEl.style.display !== 'flex' && reportModalEl.style.display !== 'flex') {
+        let hoveredCard = null;
+        menuCards.forEach(card => {
+          const rect = card.getBoundingClientRect();
+          if (
+            currentX >= rect.left &&
+            currentX <= rect.right &&
+            currentY >= rect.top &&
+            currentY <= rect.bottom
+          ) {
+            hoveredCard = card;
+          }
+        });
+
+        if (hoveredCard) {
+          if (activeCardEl !== hoveredCard) {
+            clearCardHovers();
+            activeCardEl = hoveredCard;
+            activeCardEl.classList.add('active-hover');
+            dwellStartTime = timestamp;
+            playSound('hover');
+          } else {
+            const elapsed = timestamp - dwellStartTime;
+            const progress = Math.min(100, (elapsed / DWELL_DURATION) * 100);
+            const barFill = activeCardEl.querySelector('.dwell-bar-fill');
+            if (barFill) barFill.style.width = `${progress}%`;
+
+            if (elapsed >= DWELL_DURATION) {
+              const chosenIdx = Number(activeCardEl.dataset.idx);
+              selectOrder(chosenIdx);
+              clearCardHovers();
+            }
+          }
+        } else {
+          clearCardHovers();
+        }
+      }
+
+      requestAnimationFrame(updateLoop);
+    }
+
+    function selectOrder(optionIdx) {
+      isProcessingFeedback = true;
+      const chosen = currentShuffledOptions[optionIdx];
+
+      totalKcal += chosen.kcal;
+      totalSugarTsp += chosen.sugarTsp;
+      chosenReceipt.push({
+        stage: MEAL_STAGES[currentStageIndex].stageName.split(':')[1].trim(),
+        food: chosen.food,
+        drink: chosen.drink.replace("Minuman: ", ""),
+        kcal: chosen.kcal,
+        sugarTsp: chosen.sugarTsp
+      });
+
+      updateMetersUI();
+
+      const isHealthyChoice = chosen.kcal <= 500 && chosen.sugarTsp <= 1.0;
+      playSound(isHealthyChoice ? 'goodOrder' : 'heavyOrder');
+
+      document.getElementById('fb-dish-name').textContent = `${chosen.food} + ${chosen.drink.replace("Minuman: ", "")}`;
+      
+      const kcalPill = document.getElementById('fb-kcal-pill');
+      kcalPill.textContent = `+${chosen.kcal} kcal`;
+      kcalPill.style.background = chosen.kcal > 650 ? "#ef4444" : "#10b981";
+      kcalPill.style.color = "#ffffff";
+
+      const sugarPill = document.getElementById('fb-sugar-pill');
+      sugarPill.textContent = `+${chosen.sugarTsp.toFixed(1)} sudu teh gula`;
+      sugarPill.style.background = chosen.sugarTsp >= 3.0 ? "#f59e0b" : "#38bdf8";
+      sugarPill.style.color = "#0f172a";
+
+      document.getElementById('fb-fact-text').textContent = chosen.fact;
+      toastEl.style.borderColor = isHealthyChoice ? "#10b981" : "#f59e0b";
+      toastEl.classList.add('show');
+
+      setTimeout(() => {
+        toastEl.classList.remove('show');
+        currentStageIndex++;
+        loadStage();
+      }, 3700);
+    }
+
+    function showFinalReceipt() {
+      const withinKcal = totalKcal <= 2150;
+      const withinSugar = totalSugarTsp <= MAX_SUGAR_TSP;
+      const passedBoth = withinKcal && withinSugar;
+
+      const titleEl = document.getElementById('end-status-title');
+      const subEl = document.getElementById('end-status-subtitle');
+      const kcalCard = document.getElementById('end-kcal-card');
+      const sugarCard = document.getElementById('end-sugar-card');
+
+      if (passedBoth) {
+        titleEl.textContent = "Tahniah! Anda Bijak Mengawal Bajet Makan Luar!";
+        titleEl.style.color = "#10b981";
+        subEl.textContent = "Pilihan makanan dan minuman anda sepanjang hari sangat seimbang.";
+      } else {
+        titleEl.textContent = "Awas! Bajet Kalori / Gula Harian Anda Terlebih!";
+        titleEl.style.color = "#ef4444";
+        subEl.textContent = "Lihat resit di bawah untuk kesan dari mana datangnya kalori dan gula tersembunyi:";
+      }
+
+      document.getElementById('end-kcal-total').textContent = `${totalKcal} kcal`;
+      document.getElementById('end-kcal-status').textContent = withinKcal ? "Lulus Bajet (~2000 kcal)" : `Terlebih +${totalKcal - 2000} kcal!`;
+      kcalCard.style.borderColor = withinKcal ? "#10b981" : "#ef4444";
+
+      document.getElementById('end-sugar-total').textContent = `${totalSugarTsp.toFixed(1)} sudu teh`;
+      document.getElementById('end-sugar-status').textContent = withinSugar ? "Bawah Had (Maks 10 sudu teh)" : `Terlebih +${(totalSugarTsp - 10).toFixed(1)} sudu teh!`;
+      sugarCard.style.borderColor = withinSugar ? "#10b981" : "#ef4444";
+
+      // Senaraikan Resit
+      const receiptListEl = document.getElementById('receipt-list');
+      receiptListEl.innerHTML = chosenReceipt.map(item => `
+        <div class="receipt-item">
+          <div>
+            <strong style="color: #38bdf8;">${item.stage}:</strong> ${item.food} <span style="color:#94a3b8;">(${item.drink})</span>
+          </div>
+          <div style="white-space: nowrap; font-weight: 800; color: ${item.kcal > 650 ? '#fca5a5' : '#a7f3d0'};">
+            ${item.kcal} kcal | ${item.sugarTsp} sdt gula
+          </div>
+        </div>
+      `).join('');
+
+      const adviceEl = document.getElementById('end-advice-text');
+      if (totalSugarTsp > MAX_SUGAR_TSP) {
+        adviceEl.textContent = "Tip Pegawai Pemakanan: Cara paling mudah memotong 500 kcal dan 10 sudu teh gula sehari tanpa perlu berlapar adalah dengan menukar minuman manis (Teh Tarik / Boba / Sirap) kepada Air Kosong atau Kopi/Teh O Tanpa Gula!";
+      } else if (!withinKcal) {
+        adviceEl.textContent = "Tip Pegawai Pemakanan: Gula anda terkawal, tetapi kalori makanan agak tinggi. Kurangkan kuah banjir, makanan bergoreng, dan elakkan makan berat lewat malam (Supper).";
+      } else {
+        adviceEl.textContent = "Kekalkan amalan ini! Memilih lauk bakar/sup dan minuman tanpa gula semasa makan di luar sangat membantu mencegah diabetes dan kolesterol tinggi.";
+      }
+
+      endModalEl.style.display = 'flex';
+      saveLocalRecord(totalKcal, totalSugarTsp, passedBoth ? "Lulus Bajet" : "Terlebih Bajet");
+    }
+
+    // --- 4. SISTEM REKOD LAPORAN TEMPATAN (LOCALSTORAGE CSV ASING) ---
+    const STORAGE_KEY = "rekod_cabaran_mamak_kafe";
+
+    function getRecords() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveLocalRecord(kcal, sugar, statusText) {
+      const existing = getRecords();
+      const now = new Date();
+      const tarikh = now.toLocaleDateString('en-GB', { timeZone: 'Asia/Kuching' });
+      const masa = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kuching' });
+
+      existing.push({
+        bil: existing.length + 1,
+        tarikhMasa: `${tarikh} ${masa}`,
+        jumlahKcal: kcal,
+        jumlahGulaSdt: Number(sugar.toFixed(1)),
+        status: statusText,
+        modKawalan: activeControlMode
+      });
+
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+      updateReportButtonUI();
+    }
+
+    function updateReportButtonUI() {
+      const existing = getRecords();
+      const btn = document.getElementById('btn-open-report');
+      if (btn) btn.textContent = `Laporan (${existing.length})`;
+    }
+
+    function openReportModal() {
+      const existing = getRecords();
+      const box = document.getElementById('report-summary-box');
+
+      if (existing.length === 0) {
+        box.innerHTML = "Belum ada rekod pengunjung yang menamatkan simulasi ini.";
+      } else {
+        const total = existing.length;
+        const avgKcal = Math.round(existing.reduce((a, r) => a + Number(r.jumlahKcal), 0) / total);
+        const avgSugar = (existing.reduce((a, r) => a + Number(r.jumlahGulaSdt), 0) / total).toFixed(1);
+        const passed = existing.filter(r => r.status === "Lulus Bajet").length;
+
+        box.innerHTML = `
+          <div><strong>Modul:</strong> Cabaran Order Mamak & Kafe Viral</div>
+          <div><strong>Jumlah Pemain Selesai:</strong> ${total} orang</div>
+          <div><strong>Purata Kalori Dipilih:</strong> ${avgKcal} kcal / hari</div>
+          <div><strong>Purata Gula Dipilih:</strong> ${avgSugar} sudu teh / hari</div>
+          <div><strong>Berjaya Lulus Bajet Sihat:</strong> ${passed} orang (${Math.round((passed/total)*100)}%)</div>
+        `;
+      }
+      reportModalEl.style.display = 'flex';
+    }
+
+    function closeReportModal() {
+      reportModalEl.style.display = 'none';
+    }
+
+    function downloadCSVReport() {
+      const existing = getRecords();
+      if (existing.length === 0) {
+        alert("Tiada data pemain untuk dimuat turun.");
+        return;
+      }
+
+      let csv = "Bil,Tarikh dan Masa,Jumlah Kalori (kcal),Jumlah Gula (Sudu Teh),Status Bajet,Mod Kawalan\n";
+      existing.forEach(r => {
+        csv += `${r.bil},"${r.tarikhMasa}",${r.jumlahKcal},${r.jumlahGulaSdt},"${r.status}","${r.modKawalan}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "Laporan_Output_Order_Mamak_Kafe.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function clearLocalRecords() {
+      if (confirm("Padam semua rekod pemain bagi modul Order Mamak & Kafe ini?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        updateReportButtonUI();
+        openReportModal();
+      }
+    }
+
+    // --- 5. KAWALAN SENTUHAN SKRIN & TETIKUS (FALLBACK) ---
+    window.addEventListener('pointermove', (e) => {
+      targetX = e.clientX;
+      targetY = e.clientY;
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (e.touches.length > 0) {
+        targetX = e.touches[0].clientX;
+        targetY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    // --- 6. KAWALAN KAMERA MEDIAPIPE HANDS ---
+    const videoElement = document.getElementById('webcam-video');
+    const camStatusEl = document.getElementById('cam-status');
+
+    function onResults(results) {
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        activeControlMode = "Kamera (Hand Tracking)";
+        const palmCenter = results.multiHandLandmarks[0][9];
+        targetX = (1 - palmCenter.x) * window.innerWidth;
+        targetY = palmCenter.y * window.innerHeight;
+      }
+    }
+
+    async function initCamera() {
+      try {
+        const hands = new Hands({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
+
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence: 0.65
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await hands.send({ image: videoElement });
+          },
+          width: 640,
+          height: 480
+        });
+
+        await camera.start();
+        camStatusEl.textContent = "Kamera Aktif: Halakan tapak tangan pada kad menu untuk buat pesanan. (Tiada video dirakam).";
+        camStatusEl.style.color = "#facc15";
+      } catch (err) {
+        console.warn("Kamera tidak dapat diakses, guna mod sentuhan/tetikus:", err);
+        camStatusEl.textContent = "Mod Sentuhan/Tetikus Aktif (Kamera tidak dikesan).";
+      }
+    }
+
+    // Mulakan Permainan
+    updateReportButtonUI();
+    resetGame();
+    requestAnimationFrame(updateLoop);
+    initCamera();
+  </script>
+</body>
+</html>
